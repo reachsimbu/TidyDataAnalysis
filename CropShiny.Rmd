@@ -1,0 +1,92 @@
+---
+title: "Crop Yields"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = FALSE,warning = FALSE)
+```
+
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(forcats)
+library(shiny)
+library(readr)
+library(janitor)
+library(stringr)
+library(plotly)
+
+key_crop_yields <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-01/key_crop_yields.csv')
+
+yield_tidy <- key_crop_yields%>%
+  clean_names()%>%
+  rename_all(str_remove, "_tonnes.*")%>%
+  pivot_longer(wheat:bananas,names_to = "crops",values_to = "yield")%>%
+  filter(!is.na(yield))%>%
+  mutate(crop=str_replace_all(crops,"_"," "),
+         crop=str_to_title(crops))
+
+crop_top <- yield_tidy%>%
+  count(crops,sort=TRUE)%>%
+  head(9)%>%
+  pull(crops)
+
+```
+
+## Dashboard on Crop yield (Tonnes per hectare)
+
+```{r}
+plot_yields <- function(tbl,facet_scales="fixed"){
+ g<- tbl%>%
+    mutate(crops = fct_reorder(crops, -yield)) %>%
+    ggplot(aes(year, yield, color = entity)) +
+    geom_line() +
+    facet_wrap(~crops,scales = facet_scales)+
+    labs(
+      x = "",
+      y = "Yields (Tonnes per hectare) ",
+      title = "Crop yields in India over time",
+      caption = "Source : Our world in data / Visualisation by Simbu",
+      color = "Crops"
+    )
+ 
+ ggplotly(g)
+}
+
+#yield_tidy%>%
+ # filter(code %in% c("USA","IND"))%>%
+  #plot_yields()
+
+```
+
+
+```{r eruptions, echo=FALSE}
+inputPanel(
+  selectInput("entity", label = "Country / Continent / Region:",
+              choices = unique(yield_tidy$entity), 
+              multiple=TRUE,
+              selected = "India"),
+   selectInput("crops", label = "Crops:",
+              choices = unique(yield_tidy$crops), 
+              multiple=TRUE,
+              selected = crop_top),
+  radioButtons("facet_scales",
+               label="",
+               choices=c("Free Y-axis"="free_y",
+                       "Same"="fixed"))
+  
+
+)
+
+
+
+renderPlotly({
+yield_tidy%>%
+    filter(entity %in% input$entity,
+    crops %in% input$crops)%>%
+    plot_yields(facet_scales=input$facet_scales)
+})
+```
